@@ -19,18 +19,19 @@ namespace TestFindFile
             // string path = @"F:\MyDir";
             // string target = @"c:\TestDir";
 
-            DirectoryInfo di = new DirectoryInfo(@"F:\testimgs");
+            DirectoryInfo dir = new DirectoryInfo(@"F:\testimgs");
 
             sw.Start();
-            FindFilew(di);
-            Console.WriteLine("共花费时间:{0}ms",sw.ElapsedMilliseconds);
+            Test(dir);
+
             //Test();
-            
-            
+
+            Console.WriteLine("共花费时间:{0}ms", sw.ElapsedMilliseconds);
             Console.ReadLine();
 
         }
 
+        //by Parallel+ThreadPool.QueueUserWorkItem()
         static void  FindFilew(DirectoryInfo di)
         {
             DirectoryInfo[] dis = di.GetDirectories();
@@ -76,10 +77,153 @@ namespace TestFindFile
                     });
                     if (result.IsCompleted)
                     {
-                        Console.WriteLine("文件夹{0}已压缩完毕. \r\n",p);
+                        Console.WriteLine("文件夹{0}已压缩完毕.当前线程ID:{1}",p, Thread.CurrentThread.ManagedThreadId);
                     }
                 }, dis[j]);
             }
+        }
+
+        //by Parallel.ForEach
+        static void AsynchronizationZipFile(DirectoryInfo dir)
+        {
+            DirectoryInfo[] dis = dir.GetDirectories();
+            ParallelLoopResult all_result = Parallel.ForEach(dis,p=> {                
+                FileInfo[] files = p.GetFiles();
+                Console.WriteLine("目录：" + p.FullName);
+                string wenj = p.FullName.Substring(2);
+                sourcePath = @"F:\saveimg" + wenj;
+                if (!Directory.Exists(sourcePath))
+                {
+                    // Create the directory it does not exist.
+                    Directory.CreateDirectory(sourcePath);
+                }
+                var targetPath = sourcePath + @"\";
+                Parallel.ForEach(files, fileinfo =>
+                {
+                    Stopwatch swatch = new Stopwatch();
+                    swatch.Start();
+                    Image sourceImg = Image.FromFile(fileinfo.FullName);
+                    int width = sourceImg.Width < 1000 ? sourceImg.Width : 1000;
+                    int height = int.Parse(Math.Round(sourceImg.Height * (double)width / sourceImg.Width).ToString());
+                    System.Drawing.Image targetImg = new System.Drawing.Bitmap(width, height);
+                    using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(targetImg))
+                    {
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Default;
+                        g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
+                        g.DrawImage(sourceImg, new System.Drawing.Rectangle(0, 0, width, height), new System.Drawing.Rectangle(0, 0, sourceImg.Width, sourceImg.Height), System.Drawing.GraphicsUnit.Pixel);
+                        g.Dispose();
+                    }
+                    targetImg.Save(targetPath + Path.GetFileNameWithoutExtension(fileinfo.FullName) + ".jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                    sourceImg.Dispose();
+                    targetImg.Dispose();
+                    Console.WriteLine("图片: {0} 已被压缩--花费时间: {1}ms--图片大小: {2}", fileinfo.FullName, swatch.ElapsedMilliseconds, fileinfo.Length);
+                });
+            });            
+        }
+
+        static void SynchronizationZipFile(DirectoryInfo dir)
+        {
+            DirectoryInfo[] dis = dir.GetDirectories();
+            foreach (var p in dis)
+            {
+                
+                Console.WriteLine("目录：" + p.FullName);
+                string wenj = p.FullName.Substring(2);
+                sourcePath = @"F:\saveimg" + wenj;
+                if (!Directory.Exists(sourcePath))
+                {
+                    // Create the directory it does not exist.
+                    Directory.CreateDirectory(sourcePath);
+                }
+                var targetPath = sourcePath + @"\";
+                FileInfo[] files = p.GetFiles();
+                foreach (var fileinfo in files)
+                {
+                    Stopwatch swatch = new Stopwatch();
+                    swatch.Start();
+                    Image sourceImg = Image.FromFile(fileinfo.FullName);
+                    int width = sourceImg.Width < 1000 ? sourceImg.Width : 1000;
+                    int height = int.Parse(Math.Round(sourceImg.Height * (double)width / sourceImg.Width).ToString());
+                    System.Drawing.Image targetImg = new System.Drawing.Bitmap(width, height);
+                    using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(targetImg))
+                    {
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Default;
+                        g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+                        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
+                        g.DrawImage(sourceImg, new System.Drawing.Rectangle(0, 0, width, height), new System.Drawing.Rectangle(0, 0, sourceImg.Width, sourceImg.Height), System.Drawing.GraphicsUnit.Pixel);
+                        g.Dispose();
+                    }
+                    targetImg.Save(targetPath + Path.GetFileNameWithoutExtension(fileinfo.FullName) + ".jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                    sourceImg.Dispose();
+                    targetImg.Dispose();
+                    Console.WriteLine("图片: {0} 已被压缩--花费时间: {1}ms--图片大小: {2}", fileinfo.FullName, swatch.ElapsedMilliseconds, fileinfo.Length);
+                }
+            }
+
+        }
+
+        static async Task<bool>  AsynchronizationZipFile2(DirectoryInfo dir)
+        {
+            DirectoryInfo[] dis = dir.GetDirectories();
+            var a= await Task.Run(() =>
+            {
+                foreach (var item in dis)
+                {
+                    ThreadPool.QueueUserWorkItem(dir_item => {
+                        var p = (DirectoryInfo)dir_item;
+                        Console.WriteLine("目录：" + p.FullName);
+                        string wenj = p.FullName.Substring(2);
+                        sourcePath = @"F:\saveimg" + wenj;
+                        if (!Directory.Exists(sourcePath))
+                        {
+                            // Create the directory it does not exist.
+                            Directory.CreateDirectory(sourcePath);
+                        }
+                        var targetPath = sourcePath + @"\";
+                        FileInfo[] files = p.GetFiles();
+                        foreach (var file in files)
+                        {
+                            ThreadPool.QueueUserWorkItem(d => {
+                                var fileinfo = (FileInfo)d;
+                                Stopwatch swatch = new Stopwatch();
+                                swatch.Start();
+                                Image sourceImg = Image.FromFile(fileinfo.FullName);
+                                int width = sourceImg.Width < 1000 ? sourceImg.Width : 1000;
+                                int height = int.Parse(Math.Round(sourceImg.Height * (double)width / sourceImg.Width).ToString());
+                                System.Drawing.Image targetImg = new System.Drawing.Bitmap(width, height);
+                                using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(targetImg))
+                                {
+                                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
+                                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.Default;
+                                    g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
+                                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighSpeed;
+                                    g.DrawImage(sourceImg, new System.Drawing.Rectangle(0, 0, width, height), new System.Drawing.Rectangle(0, 0, sourceImg.Width, sourceImg.Height), System.Drawing.GraphicsUnit.Pixel);
+                                    g.Dispose();
+                                }
+                                targetImg.Save(targetPath + Path.GetFileNameWithoutExtension(fileinfo.FullName) + ".jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
+
+                                sourceImg.Dispose();
+                                targetImg.Dispose();
+                                Console.WriteLine("图片: {0} 已被压缩--花费时间: {1}ms--图片大小: {2}", fileinfo.FullName, swatch.ElapsedMilliseconds, fileinfo.Length);
+                            }, file);
+                        }
+                    }, item);
+                }                
+                return true;
+            });
+
+            return a;
+        }
+
+        static async Task Test(DirectoryInfo dir)
+        {
+            var hhe= AsynchronizationZipFile2(dir);
+            Console.WriteLine(hhe);
         }
 
         public static async Task<Image>  GetImageThumbByFileInfo(FileInfo fileinfo)
