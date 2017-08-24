@@ -20,13 +20,15 @@ namespace TestFindFile
             // string target = @"c:\TestDir";
 
             DirectoryInfo dir = new DirectoryInfo(@"F:\testimgs");
-
+            
             sw.Start();
-            Test(dir);
 
-            //Test();
-
-            Console.WriteLine("共花费时间:{0}ms", sw.ElapsedMilliseconds);
+            //AsynchronizationZipFile2(dir);
+            //Test();                   
+            MyThread test = new MyThread();
+            test.MyEvent += new Mydelegate((s) => { Console.WriteLine("事件触发:{0}", s); });
+            test.SomeMethod();
+            Console.WriteLine("完成");
             Console.ReadLine();
 
         }
@@ -213,17 +215,12 @@ namespace TestFindFile
                             }, file);
                         }
                     }, item);
-                }                
+                }
+                Console.WriteLine("共花费时间:{0}ms", sw.ElapsedMilliseconds);
                 return true;
             });
 
             return a;
-        }
-
-        static async Task Test(DirectoryInfo dir)
-        {
-            var hhe= AsynchronizationZipFile2(dir);
-            Console.WriteLine(hhe);
         }
 
         public static async Task<Image>  GetImageThumbByFileInfo(FileInfo fileinfo)
@@ -253,5 +250,21 @@ namespace TestFindFile
         }
 
 
+    }
+
+    public delegate void Mydelegate(string result);
+    class MyThread
+    {
+        public event Mydelegate MyEvent;
+        public async Task  SomeMethod()
+        {
+            await Task.Run(() =>
+            {
+                string s = "456";
+                Thread.Sleep(5000);
+                MyEvent(s);
+            });
+            
+        }
     }
 }
